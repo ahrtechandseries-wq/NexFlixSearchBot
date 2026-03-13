@@ -77,7 +77,7 @@ def search_movie(message):
                 bot.send_message(message.chat.id, f"🍿 *Movie:* {name}", parse_mode="Markdown", reply_markup=markup)
     else:
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📝 Request to Admin", url=f"https://t.me/{ADMIN_USERNAME}"))
+        markup.add(types.InlineKeyboardButton("📝 Request to Admin", url=f"https://t.me/+-Bo6KSNJWf9iNjQ1"))
         bot.reply_to(message, "❌ মুভিটি নেই। রিকোয়েস্ট করুন।", reply_markup=markup)
 
 if __name__ == "__main__":
