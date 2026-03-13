@@ -7,8 +7,7 @@ from threading import Thread
 import threading
 import time
 
-
-# সরাসরি এখানে আপনার তথ্য বসিয়ে দিলাম যেন ভেরিয়েবলের ঝামেলা না থাকে
+# আপনার তথ্য
 API_TOKEN = '8591858459:AAESL_0xlUvBMKEyUi3e9P5p5r2XUVKriF8'
 ADMIN_ID = 7414830213
 ADMIN_USERNAME = "anikhasanjihad"
@@ -27,8 +26,8 @@ def run():
 def keep_alive():
     t = Thread(target=run)
     t.start()
-# -------------------------------
 
+# --- Database Setup ---
 def init_db():
     conn = sqlite3.connect('nexflix.db')
     cursor = conn.cursor()
@@ -37,6 +36,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+# --- Auto Delete Function ---
 def delete_message_after_time(chat_id, message_id, delay):
     time.sleep(delay)
     try:
@@ -44,6 +44,7 @@ def delete_message_after_time(chat_id, message_id, delay):
     except Exception as e:
         print(f"Error deleting message: {e}")
 
+# --- Commands ---
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.reply_to(message, "NexFlix Bot-এ স্বাগতম! মুভির নাম লিখে সার্চ দিন।")
@@ -64,16 +65,13 @@ def backup_database(message):
                 bot.send_document(message.chat.id, f, caption="📂 NexFlix Database Backup")
         except Exception as e:
             bot.reply_to(message, f"❌ সমস্যা: {e}")
-            
-        # --- নতুন কমান্ডগুলো নিচে যোগ করা হলো ---
 
 @bot.message_handler(commands=['help'])
 def help_command(message):
     help_text = (
         "❓ **How to Use NexFlix Bot:**\n\n"
-        "1️⃣ Just send the movie or series name (e.g., 'Pushpa 2').\n"
-        "2️⃣ Click on the 'Watch & Download' button.\n"
-        "3️⃣ If not found, check the spelling or join our group for requests."
+        "1️⃣ Just send the movie or series name.\n"
+        "2️⃣ Result will be deleted after 5 minutes for safety."
     )
     bot.reply_to(message, help_text, parse_mode="Markdown")
 
@@ -81,7 +79,7 @@ def help_command(message):
 def website_command(message):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("🌐 Visit NexFlix Website", url="https://rnexflix.top"))
-    bot.send_message(message.chat.id, "Click below to visit our official website:", reply_markup=markup)
+    bot.send_message(message.chat.id, "Click below to visit official website:", reply_markup=markup)
 
 def save_movie(message):
     try:
@@ -93,41 +91,38 @@ def save_movie(message):
         conn.close()
         bot.reply_to(message, "🎯 মুভি সেভ হয়েছে!")
     except:
-        bot.reply_to(message, "❌ ভুল ফরম্যাট!")
+        bot.reply_to(message, "❌ ভুল ফরম্যাট! আবার চেষ্টা করুন।")
 
+# --- Search & Auto Delete ---
 @bot.message_handler(func=lambda message: True)
 def search_movie(message):
     query = message.text.strip().lower()
     if len(query) < 2: return
+    
     conn = sqlite3.connect('nexflix.db')
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM movies WHERE name LIKE ?", ('%' + query + '%',))
     results = cursor.fetchall()
     conn.close()
+    
     if results:
         for name, url, poster in results:
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("🎬 Download Now", url=url))
+            
             try:
-                bot.send_photo(message.chat.id, poster, caption=f"🍿 *Found:* {name}", parse_mode="Markdown", reply_markup=markup)
+                # পোস্টারসহ মেসেজ পাঠানো
+                sent_msg = bot.send_photo(message.chat.id, poster, caption=f"🍿 *Found:* {name}\n\n⚠️ This message will be deleted in 5 mins.", parse_mode="Markdown", reply_markup=markup)
             except:
-                bot.send_message(message.chat.id, f"🍿 *Movie:* {name}", parse_mode="Markdown", reply_markup=markup)
-                # আপনার কোডে যেখানে মেসেজ পাঠানো হচ্ছে, ধরুন সেই লাইনটি এরকম:
-sent_msg = bot.send_message(message.chat.id, "🎬 এই যে আপনার মুভি...") 
-
-# ১. ফটো পাঠানোর পর ডিলিট করার কমান্ড
-photo_msg = bot.send_photo(message.chat.id, photo_url, caption="মুভির পোস্টার")
-threading.Thread(target=delete_message_after_time, args=(message.chat.id, photo_msg.message_id, 300)).start()
-
-# ২. মুভির লিঙ্ক বা টেক্সট পাঠানোর পর ডিলিট করার কমান্ড
-text_msg = bot.send_message(message.chat.id, "🎬 এই যে আপনার মুভি লিঙ্ক...")
-threading.Thread(target=delete_message_after_time, args=(message.chat.id, text_msg.message_id, 300)).start()
-
-                    
+                # পোস্টার না থাকলে শুধু টেক্সট পাঠানো
+                sent_msg = bot.send_message(message.chat.id, f"🍿 *Movie:* {name}\n\n⚠️ This message will be deleted in 5 mins.", parse_mode="Markdown", reply_markup=markup)
+            
+            # ৫ মিনিট পর ডিলিট করার জন্য থ্রেড চালু করা
+            threading.Thread(target=delete_message_after_time, args=(message.chat.id, sent_msg.message_id, 300)).start()
     else:
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📝 Request to Admin", url=f"https://t.me/+-Bo6KSNJWf9iNjQ1"))
-        bot.reply_to(message, "❌ মুভিটি নেই। রিকোয়েস্ট করুন।", reply_markup=markup)
+        markup.add(types.InlineKeyboardButton("📝 Request to Admin", url=f"https://t.me/anikhasanzihad"))
+        bot.reply_to(message, "❌ মুভিটি ডাটাবেসে নেই। রিকোয়েস্ট করুন।", reply_markup=markup)
 
 if __name__ == "__main__":
     init_db()
