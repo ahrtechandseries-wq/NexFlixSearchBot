@@ -45,6 +45,23 @@ def add_movie(message):
         bot.register_next_step_handler(msg, save_movie)
     else:
         bot.reply_to(message, "❌ আপনি অ্যাডমিন নন।")
+        # --- নতুন কমান্ডগুলো নিচে যোগ করা হলো ---
+
+@bot.message_handler(commands=['help'])
+def help_command(message):
+    help_text = (
+        "❓ **How to Use NexFlix Bot:**\n\n"
+        "1️⃣ Just send the movie or series name (e.g., 'Pushpa 2').\n"
+        "2️⃣ Click on the 'Watch & Download' button.\n"
+        "3️⃣ If not found, check the spelling or join our group for requests."
+    )
+    bot.reply_to(message, help_text, parse_mode="Markdown")
+
+@bot.message_handler(commands=['website'])
+def website_command(message):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("🌐 Visit NexFlix Website", url="https://rnexflix.top"))
+    bot.send_message(message.chat.id, "Click below to visit our official website:", reply_markup=markup)
 
 def save_movie(message):
     try:
