@@ -6,13 +6,14 @@ import time
 import os
 
 # --- কনফিগারেশন ---
-API_TOKEN = '8591858459:AAESL_0xlUvBMKEyUi3e9P5p5r2XUVKriF8'
+# আপনার নতুন টোকেনটি এখানে বসিয়েছি
+API_TOKEN = '8591858459:AAGfJ8RcGIn0DW70Ei7Vb1fTAu1tdZvvI8s'
 ADMIN_ID = 7414830213
-CHANNEL_ID = -1002347717460 # আপনার চ্যানেল আইডি
+CHANNEL_ID = -1002347717460 
 
-# দুটি আলাদা লিঙ্ক
-FORCE_SUB_LINK = 'https://t.me/+ow2Xg3aefO1hNzBl'      # চ্যানেলে জয়েন লিঙ্ক
-REQUEST_ADMIN_LINK = 'https://t.me/+-Bo6KSNJWf9iNjQ1'  # রিকোয়েস্ট বাটন লিঙ্ক
+# লিঙ্ক দুটি আলাদা করা হয়েছে
+FORCE_SUB_LINK = 'https://t.me/+ow2Xg3aefO1hNzBl'      # জয়েন লিঙ্ক
+REQUEST_ADMIN_LINK = 'https://t.me/+-Bo6KSNJWf9iNjQ1'  # রিকোয়েস্ট লিঙ্ক
 
 bot = telebot.TeleBot(API_TOKEN)
 
@@ -58,7 +59,7 @@ def send_backup(message):
     if message.from_user.id == ADMIN_ID:
         try:
             with open('nexflix.db', 'rb') as doc:
-                bot.send_document(message.chat.id, doc, caption="📂 আপনার লেটেস্ট ডাটাবেস ফাইল।\nএটি ডাউনলোড করে GitHub-এ আপলোড দিন।")
+                bot.send_document(message.chat.id, doc, caption="📂 লেটেস্ট ডাটাবেস।\nGitHub-এ আপলোড দিন।")
         except:
             bot.reply_to(message, "❌ ফাইলটি পাওয়া যায়নি!")
 
@@ -66,7 +67,7 @@ def send_backup(message):
 @bot.message_handler(commands=['broadcast'])
 def broadcast(message):
     if message.from_user.id == ADMIN_ID:
-        msg = bot.reply_to(message, "📢 সব ইউজারকে পাঠানোর মেসেজটি লিখুন:")
+        msg = bot.reply_to(message, "📢 ব্রডকাস্ট মেসেজটি লিখুন:")
         bot.register_next_step_handler(msg, send_broadcast_logic)
 
 def send_broadcast_logic(message):
@@ -92,12 +93,12 @@ def add_movie_start(message):
 
 def process_movie_name(message):
     movie_name = message.text
-    msg = bot.reply_to(message, f"🔗 '{movie_name}' এর ডাউনলোড লিঙ্ক দিন:")
+    msg = bot.reply_to(message, f"🔗 '{movie_name}' এর লিঙ্ক দিন:")
     bot.register_next_step_handler(msg, process_movie_url, movie_name)
 
 def process_movie_url(message, movie_name):
     movie_url = message.text
-    msg = bot.reply_to(message, "🖼 মুভির পোস্টার লিঙ্ক দিন (Image URL):")
+    msg = bot.reply_to(message, "🖼 মুভির পোস্টার লিঙ্ক দিন:")
     bot.register_next_step_handler(msg, process_movie_final, movie_name, movie_url)
 
 def process_movie_final(message, movie_name, movie_url):
@@ -112,7 +113,6 @@ def process_movie_final(message, movie_name, movie_url):
 # --- মুভি সার্চ হ্যান্ডলার ---
 @bot.message_handler(func=lambda message: True)
 def handle_search(message):
-    # ১. ফোর্স সাবস্ক্রাইব চেক (প্রথম লিঙ্ক)
     if not is_subscribed(message.from_user.id):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Join Channel", url=FORCE_SUB_LINK))
@@ -132,7 +132,6 @@ def handle_search(message):
             markup.add(types.InlineKeyboardButton("🎬 Download Link", url=url))
             
             try:
-                # মুভির মেইন মেসেজ
                 sent_photo = bot.send_photo(
                     message.chat.id, 
                     poster, 
@@ -140,33 +139,21 @@ def handle_search(message):
                     parse_mode="Markdown", 
                     reply_markup=markup
                 )
+                info_msg = bot.reply_to(sent_photo, "⚠️ এই মুভি কার্ডটি ৫ মিনিট পর অটো-ডিলিট হয়ে যাবে।")
                 
-                # আলাদা সতর্কবার্তা বক্স
-                info_msg = bot.reply_to(
-                    sent_photo, 
-                    "⚠️ এই মুভি কার্ডটি ৫ মিনিট পর অটো-ডিলিট হয়ে যাবে।"
-                )
-                
-                # ৫ মিনিট পর ডিলিট টাইমার
                 threading.Thread(target=delete_message_after_time, args=(message.chat.id, sent_photo.message_id, 300)).start()
                 threading.Thread(target=delete_message_after_time, args=(message.chat.id, info_msg.message_id, 300)).start()
-
             except:
                 sent_msg = bot.send_message(message.chat.id, f"🍿 *Movie:* {name}\n\n🔗 [Download Link]({url})", parse_mode="Markdown", reply_markup=markup)
                 threading.Thread(target=delete_message_after_time, args=(message.chat.id, sent_msg.message_id, 300)).start()
     else:
-        # ২. মুভি না পাওয়া গেলে Request Admin বাটন (দ্বিতীয় লিঙ্ক)
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📝 Request Admin", url=REQUEST_ADMIN_LINK))
-        
-        bot.reply_to(
-            message, 
-            "😔 দুঃখিত, মুভিটি আমাদের ডাটাবেসে নেই।\n\nনিচের বাটনে ক্লিক করে অ্যাডমিনকে রিকোয়েস্ট দিন।", 
-            reply_markup=markup
-        )
+        bot.reply_to(message, "😔 দুঃখিত, মুভিটি আমাদের ডাটাবেসে নেই।\n\nনিচের বাটনে ক্লিক করে রিকোয়েস্ট দিন।", reply_markup=markup)
 
 if __name__ == "__main__":
     init_db()
-    print("NexFlix Bot is running...")
-    bot.infinity_polling()
-                              
+    print("NexFlix Bot is starting...")
+    # skip_pending=True দিলে আগের ঝুলে থাকা রিকোয়েস্ট এরর তৈরি করবে না
+    bot.infinity_polling(skip_pending=True)
+    
