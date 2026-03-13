@@ -1,131 +1,172 @@
 import telebot
 from telebot import types
 import sqlite3
-import os
-from flask import Flask
-from threading import Thread
 import threading
 import time
+import os
 
-# আপনার তথ্য
+# --- কনফিগারেশন ---
 API_TOKEN = '8591858459:AAESL_0xlUvBMKEyUi3e9P5p5r2XUVKriF8'
 ADMIN_ID = 7414830213
-ADMIN_USERNAME = "anikhasanjihad"
+CHANNEL_ID = -1002347717460 # আপনার চ্যানেল আইডি
+
+# দুটি আলাদা লিঙ্ক
+FORCE_SUB_LINK = 'https://t.me/+ow2Xg3aefO1hNzBl'      # চ্যানেলে জয়েন লিঙ্ক
+REQUEST_ADMIN_LINK = 'https://t.me/+-Bo6KSNJWf9iNjQ1'  # রিকোয়েস্ট বাটন লিঙ্ক
 
 bot = telebot.TeleBot(API_TOKEN)
 
-# --- Flask Server (Always On) ---
-app = Flask('')
-@app.route('/')
-def home():
-    return "NexFlix Bot is Online!"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# --- Database Setup ---
+# --- ডাটাবেস সেটআপ ---
 def init_db():
     conn = sqlite3.connect('nexflix.db')
     cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS movies 
-                      (name TEXT, url TEXT, poster TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS movies (name TEXT, url TEXT, poster TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER UNIQUE)''')
     conn.commit()
     conn.close()
 
-# --- Auto Delete Function ---
+# ৫ মিনিট পর মেসেজ ডিলিট করার ফাংশন
 def delete_message_after_time(chat_id, message_id, delay):
     time.sleep(delay)
     try:
         bot.delete_message(chat_id, message_id)
-    except Exception as e:
-        print(f"Error deleting message: {e}")
+    except:
+        pass
 
-# --- Commands ---
+# সাবস্ক্রিপশন চেক করার ফাংশন
+def is_subscribed(user_id):
+    try:
+        status = bot.get_chat_member(CHANNEL_ID, user_id).status
+        return status in ['member', 'administrator', 'creator']
+    except:
+        return True 
+
+# --- কমান্ড হ্যান্ডলার ---
+
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, "NexFlix Bot-এ স্বাগতম! মুভির নাম লিখে সার্চ দিন।")
+    conn = sqlite3.connect('nexflix.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO users VALUES (?)", (message.from_user.id,))
+    conn.commit()
+    conn.close()
+    bot.reply_to(message, "👋 NexFlix Bot-এ স্বাগতম!\n\nমুভির নাম লিখে সার্চ দিন।")
 
-@bot.message_handler(commands=['add'])
-def add_movie(message):
-    if message.from_user.id == ADMIN_ID:
-        msg = bot.reply_to(message, "✅ ফরম্যাট: `নাম | লিঙ্ক | পোস্টার`", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, save_movie)
-    else:
-        bot.reply_to(message, "❌ আপনি অ্যাডমিন নন।")
-
+# ব্যাকআপ কমান্ড
 @bot.message_handler(commands=['backup'])
-def backup_database(message):
+def send_backup(message):
     if message.from_user.id == ADMIN_ID:
         try:
-            with open('nexflix.db', 'rb') as f:
-                bot.send_document(message.chat.id, f, caption="📂 NexFlix Database Backup")
-        except Exception as e:
-            bot.reply_to(message, f"❌ সমস্যা: {e}")
+            with open('nexflix.db', 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption="📂 আপনার লেটেস্ট ডাটাবেস ফাইল।\nএটি ডাউনলোড করে GitHub-এ আপলোড দিন।")
+        except:
+            bot.reply_to(message, "❌ ফাইলটি পাওয়া যায়নি!")
 
-@bot.message_handler(commands=['help'])
-def help_command(message):
-    help_text = (
-        "❓ **How to Use NexFlix Bot:**\n\n"
-        "1️⃣ Just send the movie or series name.\n"
-        "2️⃣ Result will be deleted after 5 minutes for safety."
-    )
-    bot.reply_to(message, help_text, parse_mode="Markdown")
+# ব্রডকাস্ট কমান্ড
+@bot.message_handler(commands=['broadcast'])
+def broadcast(message):
+    if message.from_user.id == ADMIN_ID:
+        msg = bot.reply_to(message, "📢 সব ইউজারকে পাঠানোর মেসেজটি লিখুন:")
+        bot.register_next_step_handler(msg, send_broadcast_logic)
 
-@bot.message_handler(commands=['website'])
-def website_command(message):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🌐 Visit NexFlix Website", url="https://rnexflix.top"))
-    bot.send_message(message.chat.id, "Click below to visit official website:", reply_markup=markup)
+def send_broadcast_logic(message):
+    conn = sqlite3.connect('nexflix.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM users")
+    users = cursor.fetchall()
+    conn.close()
+    count = 0
+    for user in users:
+        try:
+            bot.send_message(user[0], message.text)
+            count += 1
+        except: continue
+    bot.reply_to(message, f"✅ {count} জন ইউজারকে পাঠানো হয়েছে।")
 
-def save_movie(message):
-    try:
-        data = message.text.split('|')
-        conn = sqlite3.connect('nexflix.db')
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO movies VALUES (?, ?, ?)", (data[0].strip(), data[1].strip(), data[2].strip()))
-        conn.commit()
-        conn.close()
-        bot.reply_to(message, "🎯 মুভি সেভ হয়েছে!")
-    except:
-        bot.reply_to(message, "❌ ভুল ফরম্যাট! আবার চেষ্টা করুন।")
+# মুভি অ্যাড করার কমান্ড
+@bot.message_handler(commands=['add'])
+def add_movie_start(message):
+    if message.from_user.id == ADMIN_ID:
+        msg = bot.reply_to(message, "📝 মুভির নাম দিন:")
+        bot.register_next_step_handler(msg, process_movie_name)
 
-# --- Search & Auto Delete ---
+def process_movie_name(message):
+    movie_name = message.text
+    msg = bot.reply_to(message, f"🔗 '{movie_name}' এর ডাউনলোড লিঙ্ক দিন:")
+    bot.register_next_step_handler(msg, process_movie_url, movie_name)
+
+def process_movie_url(message, movie_name):
+    movie_url = message.text
+    msg = bot.reply_to(message, "🖼 মুভির পোস্টার লিঙ্ক দিন (Image URL):")
+    bot.register_next_step_handler(msg, process_movie_final, movie_name, movie_url)
+
+def process_movie_final(message, movie_name, movie_url):
+    movie_poster = message.text
+    conn = sqlite3.connect('nexflix.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO movies VALUES (?, ?, ?)", (movie_name, movie_url, movie_poster))
+    conn.commit()
+    conn.close()
+    bot.reply_to(message, f"✅ '{movie_name}' সেভ হয়েছে!\n⚠️ /backup নিয়ে GitHub-এ আপলোড দিন।")
+
+# --- মুভি সার্চ হ্যান্ডলার ---
 @bot.message_handler(func=lambda message: True)
-def search_movie(message):
+def handle_search(message):
+    # ১. ফোর্স সাবস্ক্রাইব চেক (প্রথম লিঙ্ক)
+    if not is_subscribed(message.from_user.id):
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("📢 Join Channel", url=FORCE_SUB_LINK))
+        bot.reply_to(message, "❌ আমাদের চ্যানেলে জয়েন না থাকলে মুভি পাবেন না!", reply_markup=markup)
+        return
+
     query = message.text.strip().lower()
-    if len(query) < 2: return
-    
     conn = sqlite3.connect('nexflix.db')
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM movies WHERE name LIKE ?", ('%' + query + '%',))
     results = cursor.fetchall()
     conn.close()
-    
+
     if results:
         for name, url, poster in results:
             markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("🎬 Download Now", url=url))
+            markup.add(types.InlineKeyboardButton("🎬 Download Link", url=url))
             
             try:
-                # পোস্টারসহ মেসেজ পাঠানো
-                sent_msg = bot.send_photo(message.chat.id, poster, caption=f"🍿 *Found:* {name}\n\n⚠️ This message will be deleted in 5 mins.", parse_mode="Markdown", reply_markup=markup)
+                # মুভির মেইন মেসেজ
+                sent_photo = bot.send_photo(
+                    message.chat.id, 
+                    poster, 
+                    caption=f"🍿 *Movie:* {name.upper()}", 
+                    parse_mode="Markdown", 
+                    reply_markup=markup
+                )
+                
+                # আলাদা সতর্কবার্তা বক্স
+                info_msg = bot.reply_to(
+                    sent_photo, 
+                    "⚠️ এই মুভি কার্ডটি ৫ মিনিট পর অটো-ডিলিট হয়ে যাবে।"
+                )
+                
+                # ৫ মিনিট পর ডিলিট টাইমার
+                threading.Thread(target=delete_message_after_time, args=(message.chat.id, sent_photo.message_id, 300)).start()
+                threading.Thread(target=delete_message_after_time, args=(message.chat.id, info_msg.message_id, 300)).start()
+
             except:
-                # পোস্টার না থাকলে শুধু টেক্সট পাঠানো
-                sent_msg = bot.send_message(message.chat.id, f"🍿 *Movie:* {name}\n\n⚠️ This message will be deleted in 5 mins.", parse_mode="Markdown", reply_markup=markup)
-            
-            # ৫ মিনিট পর ডিলিট করার জন্য থ্রেড চালু করা
-            threading.Thread(target=delete_message_after_time, args=(message.chat.id, sent_msg.message_id, 300)).start()
+                sent_msg = bot.send_message(message.chat.id, f"🍿 *Movie:* {name}\n\n🔗 [Download Link]({url})", parse_mode="Markdown", reply_markup=markup)
+                threading.Thread(target=delete_message_after_time, args=(message.chat.id, sent_msg.message_id, 300)).start()
     else:
+        # ২. মুভি না পাওয়া গেলে Request Admin বাটন (দ্বিতীয় লিঙ্ক)
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📝 Request to Admin", url=f"https://t.me/+-Bo6KSNJWf9iNjQ1"))
-        bot.reply_to(message, "❌ মুভিটি ডাটাবেসে নেই। রিকোয়েস্ট করুন।", reply_markup=markup)
+        markup.add(types.InlineKeyboardButton("📝 Request Admin", url=REQUEST_ADMIN_LINK))
+        
+        bot.reply_to(
+            message, 
+            "😔 দুঃখিত, মুভিটি আমাদের ডাটাবেসে নেই।\n\nনিচের বাটনে ক্লিক করে অ্যাডমিনকে রিকোয়েস্ট দিন।", 
+            reply_markup=markup
+        )
 
 if __name__ == "__main__":
     init_db()
-    keep_alive()
-    print("Bot is Live...")
+    print("NexFlix Bot is running...")
     bot.infinity_polling()
+                              
