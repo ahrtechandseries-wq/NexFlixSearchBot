@@ -45,6 +45,16 @@ def add_movie(message):
         bot.register_next_step_handler(msg, save_movie)
     else:
         bot.reply_to(message, "❌ আপনি অ্যাডমিন নন।")
+
+@bot.message_handler(commands=['backup'])
+def backup_database(message):
+    if message.from_user.id == ADMIN_ID:
+        try:
+            with open('nexflix.db', 'rb') as f:
+                bot.send_document(message.chat.id, f, caption="📂 NexFlix Database Backup")
+        except Exception as e:
+            bot.reply_to(message, f"❌ সমস্যা: {e}")
+            
         # --- নতুন কমান্ডগুলো নিচে যোগ করা হলো ---
 
 @bot.message_handler(commands=['help'])
