@@ -70,7 +70,7 @@ def search_movie(message):
     if results:
         for name, url, poster in results:
             markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("🎬 View & Download Movie", url=url))
+            markup.add(types.InlineKeyboardButton("🎬 Download Now", url=url))
             try:
                 bot.send_photo(message.chat.id, poster, caption=f"🍿 *Found:* {name}", parse_mode="Markdown", reply_markup=markup)
             except:
