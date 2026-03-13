@@ -5,16 +5,15 @@ import os
 from flask import Flask
 from threading import Thread
 
-# ১. Render এর Environment Variable থেকে টোকেন ও আইডি পড়ার সিস্টেম
-API_TOKEN = os.environ.get('BOT_TOKEN')
-ADMIN_ID = int(os.environ.get('ADMIN_ID', 0))
-ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'anikhasanjihad')
+# সরাসরি এখানে আপনার তথ্য বসিয়ে দিলাম যেন ভেরিয়েবলের ঝামেলা না থাকে
+API_TOKEN = '8591858459:AAESL_0xlUvBMKEyUi3e9P5p5r2XUVKriF8'
+ADMIN_ID = 7414830213
+ADMIN_USERNAME = "anikhasanjihad"
 
 bot = telebot.TeleBot(API_TOKEN)
 
-# --- ফ্রি হোস্টিং এর জন্য Flask ওয়েব সার্ভার (বটকে জাগিয়ে রাখতে) ---
+# --- Flask Server (Always On) ---
 app = Flask('')
-
 @app.route('/')
 def home():
     return "NexFlix Bot is Online!"
@@ -25,9 +24,8 @@ def run():
 def keep_alive():
     t = Thread(target=run)
     t.start()
-# ---------------------------------------------------------
+# -------------------------------
 
-# ডাটাবেস সেটআপ
 def init_db():
     conn = sqlite3.connect('nexflix.db')
     cursor = conn.cursor()
@@ -36,11 +34,14 @@ def init_db():
     conn.commit()
     conn.close()
 
-# এডমিন মুভি এড করবে: /add
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, "NexFlix Bot-এ স্বাগতম! মুভির নাম লিখে সার্চ দিন।")
+
 @bot.message_handler(commands=['add'])
 def add_movie(message):
     if message.from_user.id == ADMIN_ID:
-        msg = bot.reply_to(message, "✅ মুভি অ্যাড ফরম্যাট:\n`নাম | পোস্ট লিঙ্ক | পোস্টার লিঙ্ক`", parse_mode="Markdown")
+        msg = bot.reply_to(message, "✅ ফরম্যাট: `নাম | লিঙ্ক | পোস্টার`", parse_mode="Markdown")
         bot.register_next_step_handler(msg, save_movie)
     else:
         bot.reply_to(message, "❌ আপনি অ্যাডমিন নন।")
@@ -48,47 +49,39 @@ def add_movie(message):
 def save_movie(message):
     try:
         data = message.text.split('|')
-        name = data[0].strip()
-        url = data[1].strip()
-        poster = data[2].strip()
-        
         conn = sqlite3.connect('nexflix.db')
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO movies VALUES (?, ?, ?)", (name, url, poster))
+        cursor.execute("INSERT INTO movies VALUES (?, ?, ?)", (data[0].strip(), data[1].strip(), data[2].strip()))
         conn.commit()
         conn.close()
-        bot.reply_to(message, f"🎯 সেভ হয়েছে: {name}")
+        bot.reply_to(message, "🎯 মুভি সেভ হয়েছে!")
     except:
-        bot.reply_to(message, "❌ ফরম্যাট ভুল! নাম | লিঙ্ক | পোস্টার এভাবে দিন।")
+        bot.reply_to(message, "❌ ভুল ফরম্যাট!")
 
-# গ্রুপে মুভি সার্চ করা
 @bot.message_handler(func=lambda message: True)
 def search_movie(message):
     query = message.text.strip().lower()
     if len(query) < 2: return
-
     conn = sqlite3.connect('nexflix.db')
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM movies WHERE name LIKE ?", ('%' + query + '%',))
     results = cursor.fetchall()
     conn.close()
-
     if results:
         for name, url, poster in results:
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("🎬 View & Download Movie", url=url))
             try:
-                bot.send_photo(message.chat.id, poster, caption=f"🍿 *Movie Found:* {name}", parse_mode="Markdown", reply_markup=markup)
+                bot.send_photo(message.chat.id, poster, caption=f"🍿 *Found:* {name}", parse_mode="Markdown", reply_markup=markup)
             except:
                 bot.send_message(message.chat.id, f"🍿 *Movie:* {name}", parse_mode="Markdown", reply_markup=markup)
     else:
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📝 Request to Admin", url=f"https://t.me/{ADMIN_USERNAME}"))
-        bot.reply_to(message, "❌ এই মুভিটি আমাদের সাইটে নেই। অ্যাডমিনকে জানান।", reply_markup=markup)
+        bot.reply_to(message, "❌ মুভিটি নেই। রিকোয়েস্ট করুন।", reply_markup=markup)
 
 if __name__ == "__main__":
     init_db()
-    keep_alive() # ওয়েব সার্ভার চালু করবে
-    print("NexFlix Bot is Running...")
+    keep_alive()
+    print("Bot is Live...")
     bot.infinity_polling()
-    
