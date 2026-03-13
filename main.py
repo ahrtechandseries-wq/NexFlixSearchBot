@@ -2,13 +2,30 @@ import telebot
 from telebot import types
 import sqlite3
 import os
+from flask import Flask
+from threading import Thread
 
-# Render এর Environment Variable থেকে টোকেন ও আইডি নিবে (নিরাপদ পদ্ধতি)
+# ১. Render এর Environment Variable থেকে টোকেন ও আইডি পড়ার সিস্টেম
 API_TOKEN = os.environ.get('BOT_TOKEN')
 ADMIN_ID = int(os.environ.get('ADMIN_ID', 0))
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'anikhasanjihad')
 
 bot = telebot.TeleBot(API_TOKEN)
+
+# --- ফ্রি হোস্টিং এর জন্য Flask ওয়েব সার্ভার (বটকে জাগিয়ে রাখতে) ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "NexFlix Bot is Online!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+# ---------------------------------------------------------
 
 # ডাটাবেস সেটআপ
 def init_db():
@@ -19,6 +36,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+# এডমিন মুভি এড করবে: /add
 @bot.message_handler(commands=['add'])
 def add_movie(message):
     if message.from_user.id == ADMIN_ID:
@@ -41,8 +59,9 @@ def save_movie(message):
         conn.close()
         bot.reply_to(message, f"🎯 সেভ হয়েছে: {name}")
     except:
-        bot.reply_to(message, "❌ ফরম্যাট ভুল!")
+        bot.reply_to(message, "❌ ফরম্যাট ভুল! নাম | লিঙ্ক | পোস্টার এভাবে দিন।")
 
+# গ্রুপে মুভি সার্চ করা
 @bot.message_handler(func=lambda message: True)
 def search_movie(message):
     query = message.text.strip().lower()
@@ -65,9 +84,11 @@ def search_movie(message):
     else:
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📝 Request to Admin", url=f"https://t.me/{ADMIN_USERNAME}"))
-        bot.send_message(message.chat.id, "❌ মুভিটি আমাদের সাইটে নেই। অ্যাডমিনকে জানান।", reply_markup=markup)
+        bot.reply_to(message, "❌ এই মুভিটি আমাদের সাইটে নেই। অ্যাডমিনকে জানান।", reply_markup=markup)
 
 if __name__ == "__main__":
     init_db()
+    keep_alive() # ওয়েব সার্ভার চালু করবে
     print("NexFlix Bot is Running...")
     bot.infinity_polling()
+    
