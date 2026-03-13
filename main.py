@@ -4,6 +4,9 @@ import sqlite3
 import os
 from flask import Flask
 from threading import Thread
+import threading
+import time
+
 
 # সরাসরি এখানে আপনার তথ্য বসিয়ে দিলাম যেন ভেরিয়েবলের ঝামেলা না থাকে
 API_TOKEN = '8591858459:AAESL_0xlUvBMKEyUi3e9P5p5r2XUVKriF8'
@@ -33,6 +36,13 @@ def init_db():
                       (name TEXT, url TEXT, poster TEXT)''')
     conn.commit()
     conn.close()
+
+def delete_message_after_time(chat_id, message_id, delay):
+    time.sleep(delay)
+    try:
+        bot.delete_message(chat_id, message_id)
+    except Exception as e:
+        print(f"Error deleting message: {e}")
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -102,6 +112,18 @@ def search_movie(message):
                 bot.send_photo(message.chat.id, poster, caption=f"🍿 *Found:* {name}", parse_mode="Markdown", reply_markup=markup)
             except:
                 bot.send_message(message.chat.id, f"🍿 *Movie:* {name}", parse_mode="Markdown", reply_markup=markup)
+                # আপনার কোডে যেখানে মেসেজ পাঠানো হচ্ছে, ধরুন সেই লাইনটি এরকম:
+sent_msg = bot.send_message(message.chat.id, "🎬 এই যে আপনার মুভি...") 
+
+# ১. ফটো পাঠানোর পর ডিলিট করার কমান্ড
+photo_msg = bot.send_photo(message.chat.id, photo_url, caption="মুভির পোস্টার")
+threading.Thread(target=delete_message_after_time, args=(message.chat.id, photo_msg.message_id, 300)).start()
+
+# ২. মুভির লিঙ্ক বা টেক্সট পাঠানোর পর ডিলিট করার কমান্ড
+text_msg = bot.send_message(message.chat.id, "🎬 এই যে আপনার মুভি লিঙ্ক...")
+threading.Thread(target=delete_message_after_time, args=(message.chat.id, text_msg.message_id, 300)).start()
+
+                    
     else:
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📝 Request to Admin", url=f"https://t.me/+-Bo6KSNJWf9iNjQ1"))
